@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FraudShield-GPU | Real-Time Fraud Detection Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg0:#0a0a0f;--bg1:#111118;--bg2:#16161f;--bg3:#1c1c28;
+  --border:#1e1e30;--border2:#252538;
+  --t1:#e2e8f0;--t2:#94a3b8;--t3:#475569;
+  --green:#76B900;--green-dim:rgba(118,185,0,.12);
+  --red:#ef4444;--red-bg:rgba(239,68,68,.1);--red-border:rgba(239,68,68,.25);
+  --amber:#f59e0b;--amber-bg:rgba(245,158,11,.1);--amber-border:rgba(245,158,11,.25);
+  --ok-bg:rgba(118,185,0,.1);--ok-border:rgba(118,185,0,.25);
+  --mono:'JetBrains Mono',monospace;
+  --radius:6px;
+}
+body{background:var(--bg0);color:var(--t1);font-family:var(--mono);min-height:100vh;font-size:12px;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.dot{animation:blink 1.5s ease-in-out infinite}
+.new-row{animation:slideIn .22s ease-out}
+.bar{width:0;transition:width 1.4s cubic-bezier(.22,1,.36,1)}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg0)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* header */
+#header{display:flex;align-items:center;justify-content:space-between;padding:11px 20px;background:var(--bg1);border-bottom:1px solid var(--border);}
+#header .brand{display:flex;align-items:center;gap:14px;}
+#header .brand-name{font-size:15px;font-weight:600;letter-spacing:-.3px;}
+#header .brand-name span{color:var(--green);}
+#header .tag{font-size:11px;color:var(--t3);}
+#header .right{display:flex;align-items:center;gap:16px;}
+#live-wrap{display:flex;align-items:center;gap:6px;}
+#live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);}
+#live-label{font-size:11px;font-weight:500;color:var(--green);}
+#toggle-btn{background:transparent;border:1px solid var(--green);color:var(--green);border-radius:var(--radius);padding:5px 13px;cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:500;display:flex;align-items:center;gap:5px;}
+#toggle-btn:hover{background:var(--green-dim);}
+
+/* kpi */
+#kpi-row{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border);}
+.kpi-card{background:var(--bg1);padding:14px 20px;border-right:1px solid var(--border);}
+.kpi-card:last-child{border-right:none;}
+.kpi-label{font-size:9px;color:var(--t3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:5px;}
+.kpi-val{font-size:22px;font-weight:500;line-height:1;}
+.kpi-sub{font-size:10px;color:var(--t3);margin-top:4px;}
+
+/* body */
+#main{display:grid;grid-template-columns:270px 1fr;height:calc(100vh - 113px);}
+#left-panel{background:var(--bg1);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;}
+.section{padding:14px 18px;border-bottom:1px solid var(--border);}
+.section-label{font-size:9px;color:var(--t3);letter-spacing:.9px;text-transform:uppercase;margin-bottom:11px;}
+.bench-row{margin-bottom:10px;}
+.bench-row:last-of-type{margin-bottom:0;}
+.bench-top{display:flex;justify-content:space-between;margin-bottom:4px;}
+.bench-name{font-size:11px;color:var(--t2);}
+.bench-name.gpu{color:var(--green);}
+.bench-val{font-size:11px;font-weight:500;}
+.bench-val.gpu{color:var(--green);}
+.bench-track{background:var(--bg0);height:16px;border-radius:3px;overflow:hidden;border:1px solid var(--border);}
+.bench-fill{height:100%;border-radius:2px;}
+.bench-note{font-size:10px;color:var(--green);text-align:right;margin-top:6px;}
+
+/* sparkline */
+#spark-wrap{position:relative;height:70px;width:100%;}
+
+/* model table */
+.m-row{display:flex;justify-content:space-between;padding:3px 0;}
+.m-key{font-size:11px;color:var(--t3);}
+.m-val{font-size:11px;font-weight:500;}
+
+/* feed */
+#right-panel{display:flex;flex-direction:column;background:var(--bg2);}
+#feed-header{display:flex;justify-content:space-between;align-items:center;padding:10px 18px;background:var(--bg1);border-bottom:1px solid var(--border);}
+#col-headers{display:grid;grid-template-columns:85px minmax(0,1fr) 76px 82px 52px;gap:8px;padding:5px 18px;background:var(--bg1);border-bottom:1px solid var(--border);}
+.ch{font-size:9px;color:var(--t3);letter-spacing:.6px;text-transform:uppercase;}
+#feed{overflow-y:auto;flex:1;}
+.feed-row{display:grid;grid-template-columns:85px minmax(0,1fr) 76px 82px 52px;gap:8px;padding:7px 18px;border-bottom:1px solid var(--border);align-items:center;}
+.feed-row:hover{background:var(--bg3);}
+.txn-id{font-size:11px;color:var(--t3);}
+.merchant{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.country{font-size:10px;color:var(--t3);margin-left:4px;}
+.amount{font-size:11px;font-weight:500;text-align:right;}
+.badge{font-size:9px;font-weight:600;padding:3px 6px;border-radius:4px;text-align:center;letter-spacing:.3px;}
+.badge-ok{background:var(--ok-bg);color:var(--green);border:1px solid var(--ok-border);}
+.badge-rev{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);}
+.badge-blk{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);}
+.latency{font-size:11px;color:var(--green);text-align:right;}
+#feed-footer{padding:7px 18px;background:var(--bg1);border-top:1px solid var(--border);font-size:9px;color:var(--t3);letter-spacing:.3px;}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div class="brand">
+    <span class="brand-name">FraudShield<span>-GPU</span></span>
+    <span class="tag">NVIDIA RAPIDS · cuDF + cuML · Real-Time Fraud Intelligence</span>
+  </div>
+  <div class="right">
+    <div id="live-wrap">
+      <span class="dot" id="live-dot"></span>
+      <span id="live-label">Live</span>
+    </div>
+    <button id="toggle-btn" onclick="toggleDemo()">
+      <span id="toggle-icon">⏸</span>
+      <span id="toggle-label">Pause</span>
+    </button>
+  </div>
+</div>
+
+<div id="kpi-row">
+  <div class="kpi-card">
+    <div class="kpi-label">GPU throughput</div>
+    <div class="kpi-val" id="kpi-tp" style="color:var(--green);">3.01M</div>
+    <div class="kpi-sub">txns / sec</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Transactions scored</div>
+    <div class="kpi-val" id="kpi-total">8,47,213</div>
+    <div class="kpi-sub">this session</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Fraud blocked</div>
+    <div class="kpi-val" id="kpi-flags" style="color:var(--red);">34</div>
+    <div class="kpi-sub">flags raised</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Est. fraud prevented</div>
+    <div class="kpi-val" id="kpi-prev" style="color:var(--amber);">₹1.25L</div>
+    <div class="kpi-sub">transaction value</div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="left-panel">
+    <div class="section">
+      <div class="section-label">Pipeline time · 500K txns</div>
+      <div class="bench-row">
+        <div class="bench-top"><span class="bench-name">CPU (sklearn)</span><span class="bench-val">91.27s ✓</span></div>
+        <div class="bench-track"><div class="bench-fill bar" id="b1" style="background:var(--t3);"></div></div>
+      </div>
+      <div class="bench-row">
+        <div class="bench-top"><span class="bench-name gpu">GPU (RAPIDS)</span><span class="bench-val gpu">6.1s ~</span></div>
+        <div class="bench-track"><div class="bench-fill bar" id="b2" style="background:var(--green);"></div></div>
+      </div>
+      <div class="bench-note">↑ 14.96× faster on GPU</div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Scoring throughput (txns/sec)</div>
+      <div class="bench-row">
+        <div class="bench-top"><span class="bench-name">CPU</span><span class="bench-val">200K/s</span></div>
+        <div class="bench-track"><div class="bench-fill bar" id="b3" style="background:var(--t3);"></div></div>
+      </div>
+      <div class="bench-row">
+        <div class="bench-top"><span class="bench-name gpu">GPU (RAPIDS)</span><span class="bench-val gpu">3.01M/s</span></div>
+        <div class="bench-track"><div class="bench-fill bar" id="b4" style="background:var(--green);"></div></div>
+      </div>
+      <div class="bench-note">↑ 15× higher throughput on GPU</div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Live GPU throughput</div>
+      <div id="spark-wrap">
+        <canvas id="sparkline" role="img" aria-label="Live GPU throughput line chart, approximately 3 million transactions per second">GPU throughput ~3M txns/sec.</canvas>
+      </div>
+    </div>
+
+    <div class="section" style="flex:1;">
+      <div class="section-label">Model metrics</div>
+      <div class="m-row"><span class="m-key">Algorithm</span><span class="m-val">RandomForest (cuML)</span></div>
+      <div class="m-row"><span class="m-key">AUC-ROC</span><span class="m-val" style="color:var(--green);">0.9855</span></div>
+      <div class="m-row"><span class="m-key">Training set</span><span class="m-val">400K transactions</span></div>
+      <div class="m-row"><span class="m-key">Features</span><span class="m-val">6 engineered</span></div>
+      <div class="m-row"><span class="m-key">GPU avg latency</span><span class="m-val" style="color:var(--green);">0.87ms / txn</span></div>
+      <div class="m-row"><span class="m-key">Fraud rate</span><span class="m-val">~3% (97th pct)</span></div>
+      <div class="m-row"><span class="m-key">CPU numbers</span><span class="m-val">real run ✓</span></div>
+      <div class="m-row"><span class="m-key">GPU numbers</span><span class="m-val">RAPIDS projected ~</span></div>
+    </div>
+  </div>
+
+  <div id="right-panel">
+    <div id="feed-header">
+      <span style="font-size:9px;color:var(--t3);letter-spacing:.8px;text-transform:uppercase;">Live transaction stream</span>
+      <span style="font-size:10px;color:var(--t3);">avg GPU latency: <span style="color:var(--green);">0.87ms</span></span>
+    </div>
+    <div id="col-headers">
+      <span class="ch">TXN ID</span>
+      <span class="ch">Merchant</span>
+      <span class="ch" style="text-align:right;">Amount</span>
+      <span class="ch" style="text-align:center;">Decision</span>
+      <span class="ch" style="text-align:right;">Latency</span>
+    </div>
+    <div id="feed"></div>
+    <div id="feed-footer">
+      NVIDIA RAPIDS · cuDF · cuML · Python · scikit-learn &nbsp;|&nbsp; ✓ = real CPU run &nbsp;|&nbsp; ~ = RAPIDS projected (15× based on NVIDIA published benchmarks)
+    </div>
+  </div>
+</div>
+
+<script>
+const MERCHANTS=['PhonePe','Paytm','Amazon Pay','Flipkart','HDFC ATM','Google Pay','ICICI POS','SBI NEFT','Zomato Pay','Swiggy Money','Razorpay','Juspay'];
+const FLAGS=['IN','IN','IN','IN','IN','US','SG','AE','CN','GB'];
+let txnN=10000,totalScored=847213,flagCount=34,prevented=124800;
+let running=true,intervalId,chart;
+
+function genTxn(){
+  const fraud=Math.random()<0.04,review=!fraud&&Math.random()<0.09;
+  const amt=Math.round(fraud?Math.random()*80000+5000:review?Math.random()*15000+500:Math.random()*3000+20);
+  const dec=fraud?'BLOCK':review?'REVIEW':'APPROVE';
+  txnN++;
+  return{id:`TXN-${txnN}`,m:MERCHANTS[Math.floor(Math.random()*12)],f:FLAGS[Math.floor(Math.random()*10)],amt,dec,lat:(Math.random()*1.2+0.3).toFixed(2)};
+}
+
+function badgeClass(d){return d==='BLOCK'?'badge-blk':d==='REVIEW'?'badge-rev':'badge-ok';}
+
+function rowHTML(t,isNew){
+  return`<div class="feed-row${isNew?' new-row':''}">
+    <span class="txn-id">${t.id}</span>
+    <span class="merchant">${t.m}<span class="country">${t.f}</span></span>
+    <span class="amount">₹${t.amt.toLocaleString('en-IN')}</span>
+    <span class="badge ${badgeClass(t.dec)}">${t.dec}</span>
+    <span class="latency">${t.lat}ms</span>
+  </div>`;
+}
+
+function tick(){
+  const batch=Array.from({length:Math.floor(Math.random()*2)+1},genTxn);
+  totalScored+=Math.floor(Math.random()*4000+1500);
+  flagCount+=batch.filter(t=>t.dec==='BLOCK').length;
+  prevented+=batch.filter(t=>t.dec==='BLOCK').reduce((s,t)=>s+t.amt,0);
+  const tp=Math.floor(Math.random()*300000+2800000);
+  document.getElementById('kpi-tp').textContent=(tp/1e6).toFixed(2)+'M';
+  document.getElementById('kpi-total').textContent=totalScored.toLocaleString('en-IN');
+  document.getElementById('kpi-flags').textContent=flagCount;
+  document.getElementById('kpi-prev').textContent='₹'+(prevented/1e5).toFixed(2)+'L';
+  const feed=document.getElementById('feed');
+  feed.insertAdjacentHTML('afterbegin',batch.map(t=>rowHTML(t,true)).join(''));
+  while(feed.children.length>35)feed.removeChild(feed.lastElementChild);
+  if(chart){
+    chart.data.labels.push('');
+    chart.data.datasets[0].data.push(tp);
+    if(chart.data.labels.length>25){chart.data.labels.shift();chart.data.datasets[0].data.shift();}
+    chart.update('none');
+  }
+}
+
+function toggleDemo(){
+  running=!running;
+  const dot=document.getElementById('live-dot');
+  const lbl=document.getElementById('live-label');
+  document.getElementById('toggle-icon').textContent=running?'⏸':'▶';
+  document.getElementById('toggle-label').textContent=running?'Pause':'Resume';
+  dot.style.animation=running?'blink 1.5s ease-in-out infinite':'none';
+  dot.style.opacity=running?'1':'0.35';
+  dot.style.background=running?'var(--green)':'var(--t3)';
+  lbl.textContent=running?'Live':'Paused';
+  lbl.style.color=running?'var(--green)':'var(--t3)';
+  if(running)intervalId=setInterval(tick,700);else clearInterval(intervalId);
+}
+
+window.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('feed').innerHTML=Array.from({length:16},genTxn).map(t=>rowHTML(t,false)).join('');
+  setTimeout(()=>{
+    document.getElementById('b1').style.width='100%';
+    document.getElementById('b2').style.width='6.68%';
+    document.getElementById('b3').style.width='6.64%';
+    document.getElementById('b4').style.width='100%';
+  },400);
+  const initData=Array.from({length:10},()=>Math.floor(Math.random()*300000+2800000));
+  chart=new Chart(document.getElementById('sparkline'),{
+    type:'line',
+    data:{labels:Array(10).fill(''),datasets:[{data:initData,borderColor:'#76B900',borderWidth:2,pointRadius:0,tension:0.4,fill:true,backgroundColor:'rgba(118,185,0,0.07)'}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:0},
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{x:{display:false},y:{min:2400000,max:3600000,grid:{color:'#1e1e30',drawBorder:false},ticks:{color:'#475569',font:{size:9},callback:v=>(v/1e6).toFixed(1)+'M',maxTicksLimit:3},border:{display:false}}}}
+  });
+  intervalId=setInterval(tick,700);
+});
+</script>
+</body>
+</html>
